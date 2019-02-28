@@ -13,6 +13,7 @@ import org.apache.pdfbox.printing.Scaling;
 import org.codehaus.jettison.json.JSONArray;
 import org.codehaus.jettison.json.JSONException;
 import org.codehaus.jettison.json.JSONObject;
+import org.eclipse.jetty.websocket.api.Session;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qz.common.Constants;
@@ -110,7 +111,7 @@ public class PrintPDF extends PrintPixel implements PrintProcessor {
     }
 
     @Override
-    public void print(PrintOutput output, PrintOptions options) throws PrinterException {
+    public void print(PrintOutput output, PrintOptions options, Session session, String UID) throws PrinterException {
         if (printables.isEmpty()) {
             log.warn("Nothing to print");
             return;

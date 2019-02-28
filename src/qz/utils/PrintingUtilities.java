@@ -11,6 +11,7 @@ import qz.common.Constants;
 import qz.printer.PrintOptions;
 import qz.printer.PrintOutput;
 import qz.printer.action.PrintProcessor;
+import qz.printer.action.PrintRaw;
 import qz.printer.action.ProcessorFactory;
 import qz.ws.PrintSocketClient;
 
@@ -236,10 +237,16 @@ public class PrintingUtilities {
             PrintOptions options = new PrintOptions(params.optJSONObject("options"), output, format);
 
             processor.parseData(params.getJSONArray("data"), options);
-            processor.print(output, options);
+            processor.print(output, options, session, UID);
             log.info("Printing complete");
 
-            PrintSocketClient.sendResult(session, UID, null);
+            /**
+             * PrintRaw is the only instance of print processor that sends
+             * a response via the PrintSocketClient.
+             */
+            if (!(processor instanceof PrintRaw)) {
+                PrintSocketClient.sendResult(session, UID, null);
+            }
         }
         catch(PrinterAbortException e) {
             log.warn("Printing cancelled");

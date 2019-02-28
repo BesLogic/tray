@@ -4,6 +4,7 @@ import org.apache.commons.codec.binary.Base64InputStream;
 import org.codehaus.jettison.json.JSONArray;
 import org.codehaus.jettison.json.JSONException;
 import org.codehaus.jettison.json.JSONObject;
+import org.eclipse.jetty.websocket.api.Session;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qz.common.Constants;
@@ -51,7 +52,7 @@ public class PrintDirect extends PrintRaw {
     }
 
     @Override
-    public void print(PrintOutput output, PrintOptions options) throws PrintException {
+    public void print(PrintOutput output, PrintOptions options, Session session, String UID) throws PrintException {
         PrintRequestAttributeSet attributes = new HashPrintRequestAttributeSet();
         attributes.add(new JobName(options.getRawOptions().getJobName(Constants.RAW_PRINT), Locale.getDefault()));
 
@@ -75,7 +76,7 @@ public class PrintDirect extends PrintRaw {
 
                 SimpleDoc doc = new SimpleDoc(stream, DocFlavor.INPUT_STREAM.AUTOSENSE, null);
 
-                waitForPrint(printJob, doc, attributes);
+                waitForPrint(printJob, doc, attributes, output.getPrintService().getName(), session, UID);
             }
             catch(IOException e) {
                 throw new PrintException(e);

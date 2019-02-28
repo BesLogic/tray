@@ -2,6 +2,7 @@ package qz.printer.action;
 
 import org.codehaus.jettison.json.JSONArray;
 import org.codehaus.jettison.json.JSONException;
+import org.eclipse.jetty.websocket.api.Session;
 import qz.printer.PrintOptions;
 import qz.printer.PrintOutput;
 import qz.utils.PrintingUtilities;
@@ -29,7 +30,7 @@ public interface PrintProcessor {
      * @param output  Destination used for printing
      * @param options Printing options to use for the print job
      */
-    void print(PrintOutput output, PrintOptions options) throws PrintException, PrinterException;
+    void print(PrintOutput output, PrintOptions options, Session session, String UID) throws PrintException, PrinterException;
 
     /**
      * Reset a processor back to it's initial state.

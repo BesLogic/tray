@@ -18,6 +18,7 @@ import org.apache.commons.io.IOUtils;
 import org.codehaus.jettison.json.JSONArray;
 import org.codehaus.jettison.json.JSONException;
 import org.codehaus.jettison.json.JSONObject;
+import org.eclipse.jetty.websocket.api.Session;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qz.common.Constants;
@@ -142,7 +143,7 @@ public class PrintHTML extends PrintImage implements PrintProcessor {
     }
 
     @Override
-    public void print(PrintOutput output, PrintOptions options) throws PrinterException {
+    public void print(PrintOutput output, PrintOptions options, Session session, String UID) throws PrinterException {
         if (options.getPixelOptions().isLegacy()) {
             printLegacy(output, options);
         } else if (options.getPixelOptions().isRasterize()) {
@@ -154,7 +155,7 @@ public class PrintHTML extends PrintImage implements PrintProcessor {
                 }
             }
 
-            super.print(output, options);
+            super.print(output, options, session, UID);
         } else {
             Printer fxPrinter = null;
             for(Printer p : Printer.getAllPrinters()) {

@@ -14,6 +14,7 @@ import org.apache.commons.ssl.Base64;
 import org.codehaus.jettison.json.JSONArray;
 import org.codehaus.jettison.json.JSONException;
 import org.codehaus.jettison.json.JSONObject;
+import org.eclipse.jetty.websocket.api.Session;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qz.common.Constants;
@@ -121,7 +122,7 @@ public class PrintImage extends PrintPixel implements PrintProcessor, Printable 
     }
 
     @Override
-    public void print(PrintOutput output, PrintOptions options) throws PrinterException {
+    public void print(PrintOutput output, PrintOptions options, Session session, String UID) throws PrinterException {
         if (images.isEmpty()) {
             log.warn("Nothing to print");
             return;

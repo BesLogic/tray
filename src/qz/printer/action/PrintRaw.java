@@ -18,6 +18,7 @@ import org.apache.pdfbox.rendering.PDFRenderer;
 import org.codehaus.jettison.json.JSONArray;
 import org.codehaus.jettison.json.JSONException;
 import org.codehaus.jettison.json.JSONObject;
+import org.eclipse.jetty.websocket.api.Session;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qz.common.ByteArrayBuilder;
@@ -28,7 +29,9 @@ import qz.printer.ImageWrapper;
 import qz.printer.LanguageType;
 import qz.printer.PrintOptions;
 import qz.printer.PrintOutput;
+import qz.printer.status.PrinterStatus;
 import qz.utils.*;
+import qz.ws.PrintSocketClient;
 
 import javax.imageio.ImageIO;
 import javax.print.*;
@@ -227,7 +230,7 @@ public class PrintRaw implements PrintProcessor {
     }
 
     @Override
-    public void print(PrintOutput output, PrintOptions options) throws PrintException {
+    public void print(PrintOutput output, PrintOptions options, Session session, String UID) throws PrintException {
         PrintOptions.Raw rawOpts = options.getRawOptions();
 
         List<ByteArrayBuilder> pages;
@@ -254,7 +257,7 @@ public class PrintRaw implements PrintProcessor {
                         if (rawOpts.isAltPrinting()) {
                             printToAlternate(output.getPrintService(), bab.getByteArray());
                         } else {
-                            printToPrinter(output.getPrintService(), bab.getByteArray(), rawOpts);
+                            printToPrinter(output.getPrintService(), bab.getByteArray(), rawOpts, session, UID);
                         }
                     }
                 }
@@ -298,7 +301,7 @@ public class PrintRaw implements PrintProcessor {
     /**
      * Constructs a {@code SimpleDoc} with the {@code commands} byte array.
      */
-    private void printToPrinter(PrintService service, byte[] cmds, PrintOptions.Raw rawOpts) throws PrintException {
+    private void printToPrinter(PrintService service, byte[] cmds, PrintOptions.Raw rawOpts, Session session, String UID) throws PrintException {
         if (service == null) { throw new NullPrintServiceException("Service cannot be null"); }
         if (cmds == null || cmds.length == 0) { throw new NullCommandException("No commands found to send to the printer"); }
 
@@ -309,68 +312,84 @@ public class PrintRaw implements PrintProcessor {
 
         DocPrintJob printJob = service.createPrintJob();
 
+        waitForPrint(printJob, doc, attributes, service.getName(), session, UID);
+    }
+
+    protected void waitForPrint(DocPrintJob printJob, Doc doc, PrintRequestAttributeSet attributes, String serviceName, Session session, String UID) throws PrintException {
+        final AtomicBoolean finished = new AtomicBoolean(false);
         Winspool.PRINTER_INFO_2[] printers = WinspoolUtil.getPrinterInfo2();
         int okStatus = 0;
         boolean canPrint = true;
-
-        for (Winspool.PRINTER_INFO_2 printer : printers) {
-            if (printer.pPrinterName.equals(service.getName())) {
-                canPrint = printer.Status == okStatus;
-            }
-        }
+        final AtomicBoolean printSuccessful = new AtomicBoolean(false);
+        final PrinterStatus postPrintStatus = getPrinterStatus(serviceName);
+        PrinterStatus printerStatus = getPrinterStatus(serviceName);
+        canPrint = printerStatus.type.getCode() == okStatus;
 
         if (canPrint) {
-            waitForPrint(printJob, doc, attributes);
+            printJob.addPrintJobListener(new PrintJobListener() {
+                @Override
+                public void printDataTransferCompleted(PrintJobEvent printJobEvent) {
+                    log.debug("{}", printJobEvent);
+                    log.debug("transfered");
+                    finished.set(true);
+                }
+    
+                @Override
+                public void printJobCompleted(PrintJobEvent printJobEvent) {
+                    log.debug("{}", printJobEvent);
+                    finished.set(true);
+                }
+    
+                @Override
+                public void printJobFailed(PrintJobEvent printJobEvent) {
+                    log.error("{}", printJobEvent);
+                    finished.set(true);
+                }
+    
+                @Override
+                public void printJobCanceled(PrintJobEvent printJobEvent) {
+                    log.warn("{}", printJobEvent);
+                    finished.set(true);
+                }
+    
+                // This is the last event called after the print function is called.
+                @Override
+                public void printJobNoMoreEvents(PrintJobEvent printJobEvent) {
+                    log.debug("{}", printJobEvent);
+                    /**
+                     * We have to assume that if the printer status is not ok
+                     * that the print job has failed.
+                     */
+                    printSuccessful.set(postPrintStatus.type.getCode() == okStatus);
+                    finished.set(true);
+                }
+    
+                @Override
+                public void printJobRequiresAttention(PrintJobEvent printJobEvent) {
+                    log.info("{}", printJobEvent);
+                }
+            });
+    
+            log.trace("Sending print job to printer");
+            printJob.print(doc, attributes);
+    
+            while(!finished.get()) {
+                try { Thread.sleep(100); } catch(Exception ignore) {}
+            }
+    
+            log.trace("Print job received by printer");
+
+            /**
+             * Here when finished is true, we check the value of printSuccessful.
+             */
+            if (printSuccessful.get()) {
+                PrintSocketClient.sendResult(session, UID, "Printing was successful");
+            } else {
+                PrintSocketClient.sendError(session, UID, postPrintStatus.toString());
+            }
+        } else {
+            PrintSocketClient.sendError(session, UID, printerStatus.toString());
         }
-    }
-
-    protected void waitForPrint(DocPrintJob printJob, Doc doc, PrintRequestAttributeSet attributes) throws PrintException {
-        final AtomicBoolean finished = new AtomicBoolean(false);
-        printJob.addPrintJobListener(new PrintJobListener() {
-            @Override
-            public void printDataTransferCompleted(PrintJobEvent printJobEvent) {
-                log.debug("{}", printJobEvent);
-                finished.set(true);
-            }
-
-            @Override
-            public void printJobCompleted(PrintJobEvent printJobEvent) {
-                log.debug("{}", printJobEvent);
-                finished.set(true);
-            }
-
-            @Override
-            public void printJobFailed(PrintJobEvent printJobEvent) {
-                log.error("{}", printJobEvent);
-                finished.set(true);
-            }
-
-            @Override
-            public void printJobCanceled(PrintJobEvent printJobEvent) {
-                log.warn("{}", printJobEvent);
-                finished.set(true);
-            }
-
-            @Override
-            public void printJobNoMoreEvents(PrintJobEvent printJobEvent) {
-                log.debug("{}", printJobEvent);
-                finished.set(true);
-            }
-
-            @Override
-            public void printJobRequiresAttention(PrintJobEvent printJobEvent) {
-                log.info("{}", printJobEvent);
-            }
-        });
-
-        log.trace("Sending print job to printer");
-        printJob.print(doc, attributes);
-
-        while(!finished.get()) {
-            try { Thread.sleep(100); } catch(Exception ignore) {}
-        }
-
-        log.trace("Print job received by printer");
     }
 
     /**
@@ -395,6 +414,19 @@ public class PrintRaw implements PrintProcessor {
                 tmp.deleteOnExit();
             }
         }
+    }
+
+    private PrinterStatus getPrinterStatus(String printerName) {
+        Winspool.PRINTER_INFO_2[] printers = WinspoolUtil.getPrinterInfo2();
+        PrinterStatus printerStatus = null;
+
+        for (Winspool.PRINTER_INFO_2 printer : printers) {
+            if (printer.pPrinterName.equals(printerName)) {
+                printerStatus = PrinterStatus.getFromWMICode(printer.Status, printer.pPrinterName)[0];
+            }
+        }
+
+        return printerStatus;
     }
 
     @Override
