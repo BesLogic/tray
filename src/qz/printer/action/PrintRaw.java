@@ -321,8 +321,8 @@ public class PrintRaw implements PrintProcessor {
         int okStatus = 0;
         boolean canPrint = true;
         final AtomicBoolean printSuccessful = new AtomicBoolean(false);
-        final PrinterStatus postPrintStatus = getPrinterStatus(serviceName);
         PrinterStatus printerStatus = getPrinterStatus(serviceName);
+        PrinterStatus postPrintStatus = null;
         canPrint = printerStatus.type.getCode() == okStatus;
 
         if (canPrint) {
@@ -356,11 +356,6 @@ public class PrintRaw implements PrintProcessor {
                 @Override
                 public void printJobNoMoreEvents(PrintJobEvent printJobEvent) {
                     log.debug("{}", printJobEvent);
-                    /**
-                     * We have to assume that if the printer status is not ok
-                     * that the print job has failed.
-                     */
-                    printSuccessful.set(postPrintStatus.type.getCode() == okStatus);
                     finished.set(true);
                 }
     
@@ -376,12 +371,12 @@ public class PrintRaw implements PrintProcessor {
             while(!finished.get()) {
                 try { Thread.sleep(100); } catch(Exception ignore) {}
             }
-    
+
             log.trace("Print job received by printer");
 
-            /**
-             * Here when finished is true, we check the value of printSuccessful.
-             */
+            postPrintStatus = getPrinterStatus(serviceName);
+            printSuccessful.set(postPrintStatus.type.getCode() == okStatus);
+
             if (printSuccessful.get()) {
                 PrintSocketClient.sendResult(session, UID, "Printing was successful");
             } else {
