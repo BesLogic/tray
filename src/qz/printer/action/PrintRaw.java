@@ -46,6 +46,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import com.sun.jna.platform.win32.Winspool;
+import com.sun.jna.platform.win32.WinspoolUtil;
+
 /**
  * Sends raw data to the printer, overriding your operating system's print
  * driver. Most useful for printers such as zebra card or barcode printers.
@@ -306,7 +309,19 @@ public class PrintRaw implements PrintProcessor {
 
         DocPrintJob printJob = service.createPrintJob();
 
-        waitForPrint(printJob, doc, attributes);
+        Winspool.PRINTER_INFO_2[] printers = WinspoolUtil.getPrinterInfo2();
+        int okStatus = 0;
+        boolean canPrint = true;
+
+        for (Winspool.PRINTER_INFO_2 printer : printers) {
+            if (printer.pPrinterName.equals(service.getName())) {
+                canPrint = printer.Status == okStatus;
+            }
+        }
+
+        if (canPrint) {
+            waitForPrint(printJob, doc, attributes);
+        }
     }
 
     protected void waitForPrint(DocPrintJob printJob, Doc doc, PrintRequestAttributeSet attributes) throws PrintException {
